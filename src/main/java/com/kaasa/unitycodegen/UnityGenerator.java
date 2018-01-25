@@ -1,6 +1,5 @@
 package com.kaasa.unitycodegen;
 
-import com.google.common.collect.ImmutableMap;
 import com.samskivert.mustache.Mustache;
 import io.swagger.codegen.*;
 import io.swagger.models.Model;
@@ -15,17 +14,6 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 public class UnityGenerator extends AbstractCSharpCodegen {
     @SuppressWarnings({ "hiding" })
     private static final Logger LOGGER = LoggerFactory.getLogger(UnityGenerator.class);
-    private static final String NET45 = "v4.5";
-    private static final String NET40 = "v4.0";
-    private static final String NET35 = "v3.5";
-    // TODO: v5.0 is PCL, not netstandard version 1.3, and not a specific .NET Framework. This needs to be updated,
-    // especially because it will conflict with .NET Framework 5.0 when released, and PCL 5 refers to Framework 4.0.
-    // We should support either NETSTANDARD, PCL, or Both… but the concepts shouldn't be mixed.
-    private static final String NETSTANDARD = "v5.0";
-    private static final String UWP = "uwp";
-
-    // Defines the sdk option for targeted frameworks, which differs from targetFramework and targetFrameworkNuget
-    private static final String MCS_NET_VERSION_KEY = "x-mcs-sdk";
 
     protected String packageGuid = "{" + java.util.UUID.randomUUID().toString().toUpperCase() + "}";
     protected String clientPackage = "IO.Swagger.Client";
@@ -33,23 +21,11 @@ public class UnityGenerator extends AbstractCSharpCodegen {
     protected String apiDocPath = "docs/";
     protected String modelDocPath = "docs/";
 
-    // Defines TargetFrameworkVersion in csproj files
-    protected String targetFramework = NET45;
-
-    // Defines nuget identifiers for target framework
-    protected String targetFrameworkNuget = "net45";
-    protected boolean supportsAsync = Boolean.TRUE;
-    protected boolean supportsUWP = Boolean.FALSE;
-    protected boolean netStandard = Boolean.FALSE;
-    protected boolean generatePropertyChanged = Boolean.FALSE;
-    protected boolean hideGenerationTimestamp = Boolean.TRUE;
-
-    protected boolean validatable = Boolean.TRUE;
     protected Map<Character, String> regexModifiers;
-    protected final Map<String, String> frameworks;
 
     // By default, generated code is considered public
     protected boolean nonPublicApi = Boolean.FALSE;
+    protected boolean hideGenerationTimestamp = Boolean.TRUE;
 
     public UnityGenerator() {
         super();
@@ -72,16 +48,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
         addOption(CodegenConstants.OPTIONAL_PROJECT_GUID, CodegenConstants.OPTIONAL_PROJECT_GUID_DESC, null);
 
         addOption(CodegenConstants.INTERFACE_PREFIX, CodegenConstants.INTERFACE_PREFIX_DESC, interfacePrefix);
-
-        CliOption framework = new CliOption(CodegenConstants.DOTNET_FRAMEWORK, CodegenConstants.DOTNET_FRAMEWORK_DESC);
-        frameworks = new ImmutableMap.Builder<String, String>().put(NET35, ".NET Framework 3.5 compatible")
-                .put(NET40, ".NET Framework 4.0 compatible").put(NET45, ".NET Framework 4.5+ compatible")
-                .put(NETSTANDARD, ".NET Standard 1.3 compatible")
-                .put(UWP, "Universal Windows Platform (IMPORTANT: this will be decommissioned and replaced by v5.0)")
-                .build();
-        framework.defaultValue(this.targetFramework);
-        framework.setEnum(frameworks);
-        cliOptions.add(framework);
 
         CliOption modelPropertyNaming = new CliOption(CodegenConstants.MODEL_PROPERTY_NAMING,
                 CodegenConstants.MODEL_PROPERTY_NAMING_DESC);
@@ -115,9 +81,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
         addSwitch(CodegenConstants.OPTIONAL_EMIT_DEFAULT_VALUES, CodegenConstants.OPTIONAL_EMIT_DEFAULT_VALUES_DESC,
                 this.optionalEmitDefaultValue);
 
-        addSwitch(CodegenConstants.GENERATE_PROPERTY_CHANGED, CodegenConstants.PACKAGE_DESCRIPTION_DESC,
-                this.generatePropertyChanged);
-
         // NOTE: This will reduce visibility of all public members in templates. Users can use InternalsVisibleTo
         // https://msdn.microsoft.com/en-us/library/system.runtime.compilerservices.internalsvisibletoattribute(v=vs.110).aspx
         // to expose to shared code if the generated code is not embedded into another project. Otherwise, users of codegen
@@ -129,8 +92,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
 
         addSwitch(CodegenConstants.NETCORE_PROJECT_FILE, CodegenConstants.NETCORE_PROJECT_FILE_DESC,
                 this.netCoreProjectFileFlag);
-
-        addSwitch(CodegenConstants.VALIDATABLE, CodegenConstants.VALIDATABLE_DESC, this.validatable);
 
         regexModifiers = new HashMap<Character, String>();
         regexModifiers.put('i', "IgnoreCase");
@@ -177,99 +138,11 @@ public class UnityGenerator extends AbstractCSharpCodegen {
             excludeTests = convertPropertyToBooleanAndWriteBack(CodegenConstants.EXCLUDE_TESTS);
         }
 
-        if (additionalProperties.containsKey(CodegenConstants.VALIDATABLE)) {
-            setValidatable(convertPropertyToBooleanAndWriteBack(CodegenConstants.VALIDATABLE));
-        } else {
-            additionalProperties.put(CodegenConstants.VALIDATABLE, validatable);
-        }
-
-        if (additionalProperties.containsKey(CodegenConstants.DOTNET_FRAMEWORK)) {
-            setTargetFramework((String) additionalProperties.get(CodegenConstants.DOTNET_FRAMEWORK));
-        } else {
-            // Ensure default is set.
-            setTargetFramework(NET45);
-            additionalProperties.put(CodegenConstants.DOTNET_FRAMEWORK, this.targetFramework);
-        }
-
-        if (NET35.equals(this.targetFramework)) {
-            // This is correct, mono will require you build .NET 3.5 sources using 4.0 SDK
-            additionalProperties.put(MCS_NET_VERSION_KEY, "4");
-            additionalProperties.put("net35", true);
-            if (additionalProperties.containsKey(CodegenConstants.SUPPORTS_ASYNC)) {
-                LOGGER.warn(".NET 3.5 generator does not support async.");
-                additionalProperties.remove(CodegenConstants.SUPPORTS_ASYNC);
-            }
-
-            setTargetFrameworkNuget("net35");
-            setValidatable(Boolean.FALSE);
-            setSupportsAsync(Boolean.FALSE);
-        } else if (NETSTANDARD.equals(this.targetFramework)) {
-            // TODO: NETSTANDARD here is misrepresenting a PCL v5.0 which supports .NET Framework 4.6+, .NET Core 1.0, and Windows Universal 10.0
-            additionalProperties.put(MCS_NET_VERSION_KEY, "4.6-api");
-            if (additionalProperties.containsKey("supportsUWP")) {
-                LOGGER.warn(".NET " + NETSTANDARD + " generator does not support UWP.");
-                additionalProperties.remove("supportsUWP");
-            }
-
-            // TODO: NETSTANDARD=v5.0 and targetFrameworkNuget=netstandard1.3. These need to sync.
-            setTargetFrameworkNuget("netstandard1.3");
-            setSupportsAsync(Boolean.TRUE);
-            setSupportsUWP(Boolean.FALSE);
-            setNetStandard(Boolean.TRUE);
-
-            //Tests not yet implemented for .NET Standard codegen
-            //Todo implement it
-            excludeTests = true;
-        } else if (UWP.equals(this.targetFramework)) {
-            setTargetFrameworkNuget("uwp");
-            setSupportsAsync(Boolean.TRUE);
-            setSupportsUWP(Boolean.TRUE);
-        } else if (NET40.equals(this.targetFramework)) {
-            additionalProperties.put(MCS_NET_VERSION_KEY, "4");
-            additionalProperties.put("isNet40", true);
-
-            if (additionalProperties.containsKey(CodegenConstants.SUPPORTS_ASYNC)) {
-                LOGGER.warn(".NET " + NET40 + " generator does not support async.");
-                additionalProperties.remove(CodegenConstants.SUPPORTS_ASYNC);
-            }
-
-            setTargetFrameworkNuget("net40");
-            setSupportsAsync(Boolean.FALSE);
-        } else {
-            additionalProperties.put(MCS_NET_VERSION_KEY, "4.5.2-api");
-            setTargetFrameworkNuget("net45");
-            setSupportsAsync(Boolean.TRUE);
-        }
-
-        if (additionalProperties.containsKey(CodegenConstants.GENERATE_PROPERTY_CHANGED)) {
-            if (NET35.equals(targetFramework)) {
-                LOGGER.warn(CodegenConstants.GENERATE_PROPERTY_CHANGED
-                        + " is only supported by generated code for .NET 4+.");
-                additionalProperties.remove(CodegenConstants.GENERATE_PROPERTY_CHANGED);
-            } else if (NETSTANDARD.equals(targetFramework)) {
-                LOGGER.warn(CodegenConstants.GENERATE_PROPERTY_CHANGED
-                        + " is not supported in .NET Standard generated code.");
-                additionalProperties.remove(CodegenConstants.GENERATE_PROPERTY_CHANGED);
-            } else if (Boolean.TRUE.equals(netCoreProjectFileFlag)) {
-                LOGGER.warn(CodegenConstants.GENERATE_PROPERTY_CHANGED
-                        + " is not supported in .NET Core csproj project format.");
-                additionalProperties.remove(CodegenConstants.GENERATE_PROPERTY_CHANGED);
-            } else {
-                setGeneratePropertyChanged(
-                        convertPropertyToBooleanAndWriteBack(CodegenConstants.GENERATE_PROPERTY_CHANGED));
-            }
-        }
-
         additionalProperties.put(CodegenConstants.API_PACKAGE, apiPackage);
         additionalProperties.put(CodegenConstants.MODEL_PACKAGE, modelPackage);
         additionalProperties.put("clientPackage", clientPackage);
 
         additionalProperties.put(CodegenConstants.EXCLUDE_TESTS, excludeTests);
-        additionalProperties.put(CodegenConstants.VALIDATABLE, this.validatable);
-        additionalProperties.put(CodegenConstants.SUPPORTS_ASYNC, this.supportsAsync);
-        additionalProperties.put("supportsUWP", this.supportsUWP);
-        additionalProperties.put("netStandard", this.netStandard);
-        additionalProperties.put("targetFrameworkNuget", this.targetFrameworkNuget);
 
         // TODO: either remove this and update templates to match the "optionalEmitDefaultValues" property, or rename that property.
         additionalProperties.put("emitDefaultValue", optionalEmitDefaultValue);
@@ -330,13 +203,7 @@ public class UnityGenerator extends AbstractCSharpCodegen {
         supportingFiles
                 .add(new SupportingFile("SwaggerDateConverter.mustache", clientPackageDir, "SwaggerDateConverter.cs"));
 
-        if (NET40.equals(this.targetFramework)) {
-            // .net 4.0 doesn't include ReadOnlyDictionary…
-            supportingFiles
-                    .add(new SupportingFile("ReadOnlyDictionary.mustache", clientPackageDir, "ReadOnlyDictionary.cs"));
-        }
-
-        if (Boolean.FALSE.equals(this.netStandard) && Boolean.FALSE.equals(this.netCoreProjectFileFlag)) {
+        if (Boolean.FALSE.equals(this.netCoreProjectFileFlag)) {
             supportingFiles.add(new SupportingFile("compile.mustache", "", "build.bat"));
             supportingFiles.add(new SupportingFile("compile-mono.sh.mustache", "", "build.sh"));
 
@@ -345,9 +212,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
                     new SupportingFile("packages.config.mustache", packageFolder + File.separator, "packages.config"));
             // .travis.yml for travis-ci.org CI
             supportingFiles.add(new SupportingFile("travis.mustache", "", ".travis.yml"));
-        } else if (Boolean.FALSE.equals(this.netCoreProjectFileFlag)) {
-            supportingFiles
-                    .add(new SupportingFile("project.json.mustache", packageFolder + File.separator, "project.json"));
         }
 
         supportingFiles.add(
@@ -367,16 +231,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
                 supportingFiles.add(new SupportingFile("packages_test.config.mustache",
                         testPackageFolder + File.separator, "packages.config"));
             }
-
-            if (NET40.equals(this.targetFramework)) {
-                // Include minimal tests for modifications made to JsonSubTypes, since code is quite different for .net 4.0 from original implementation
-                supportingFiles.add(new SupportingFile("JsonSubTypesTests.mustache",
-                        testPackageFolder + File.separator + "Client", "JsonSubTypesTests.cs"));
-            }
-        }
-
-        if (Boolean.TRUE.equals(generatePropertyChanged)) {
-            supportingFiles.add(new SupportingFile("FodyWeavers.xml", packageFolder, "FodyWeavers.xml"));
         }
 
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
@@ -395,9 +249,7 @@ public class UnityGenerator extends AbstractCSharpCodegen {
                         .add(new SupportingFile("netcore_project.mustache", packageFolder, packageName + ".csproj"));
             } else {
                 supportingFiles.add(new SupportingFile("Project.mustache", packageFolder, packageName + ".csproj"));
-                if (Boolean.FALSE.equals(this.netStandard)) {
-                    supportingFiles.add(new SupportingFile("nuspec.mustache", packageFolder, packageName + ".nuspec"));
-                }
+                supportingFiles.add(new SupportingFile("nuspec.mustache", packageFolder, packageName + ".nuspec"));
             }
 
             if (Boolean.FALSE.equals(excludeTests)) {
@@ -588,15 +440,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
         }
     }
 
-    public void setTargetFramework(String dotnetFramework) {
-        if (!frameworks.containsKey(dotnetFramework)) {
-            LOGGER.warn("Invalid .NET framework version, defaulting to " + this.targetFramework);
-        } else {
-            this.targetFramework = dotnetFramework;
-        }
-        LOGGER.info("Generating code for .NET Framework " + this.targetFramework);
-    }
-
     private CodegenModel reconcileInlineEnums(CodegenModel codegenModel, CodegenModel parentCodegenModel) {
         // This generator uses inline classes to define enums, which breaks when
         // dealing with models that have subTypes. To clean this up, we will analyze
@@ -723,26 +566,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
         this.packageVersion = packageVersion;
     }
 
-    public void setTargetFrameworkNuget(String targetFrameworkNuget) {
-        this.targetFrameworkNuget = targetFrameworkNuget;
-    }
-
-    public void setSupportsAsync(Boolean supportsAsync) {
-        this.supportsAsync = supportsAsync;
-    }
-
-    public void setSupportsUWP(Boolean supportsUWP) {
-        this.supportsUWP = supportsUWP;
-    }
-
-    public void setNetStandard(Boolean netStandard) {
-        this.netStandard = netStandard;
-    }
-
-    public void setGeneratePropertyChanged(final Boolean generatePropertyChanged) {
-        this.generatePropertyChanged = generatePropertyChanged;
-    }
-
     public void setHideGenerationTimestamp(boolean hideGenerationTimestamp) {
         this.hideGenerationTimestamp = hideGenerationTimestamp;
     }
@@ -753,10 +576,6 @@ public class UnityGenerator extends AbstractCSharpCodegen {
 
     public void setNonPublicApi(final boolean nonPublicApi) {
         this.nonPublicApi = nonPublicApi;
-    }
-
-    public void setValidatable(boolean validatable) {
-        this.validatable = validatable;
     }
 
     @Override

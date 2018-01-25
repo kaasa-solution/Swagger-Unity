@@ -5,22 +5,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.IO;
-{{^netStandard}}
-{{^supportsUWP}}
 using System.Web;
-{{/supportsUWP}}
-{{/netStandard}}
 using System.Linq;
 using System.Net;
 using System.Text;
 using Newtonsoft.Json;
-{{#netStandard}}
-using RestSharp.Portable;
-using RestSharp.Portable.HttpClient;
-{{/netStandard}}
-{{^netStandard}}
 using RestSharp;
-{{/netStandard}}
 
 namespace {{packageName}}.Client
 {
@@ -55,9 +45,6 @@ namespace {{packageName}}.Client
         {
             Configuration = {{packageName}}.Client.Configuration.Default;
             RestClient = new RestClient("{{{basePath}}}");
-            {{#netStandard}}
-            RestClient.IgnoreResponseStatusCode = true;
-            {{/netStandard}}
         }
 
         /// <summary>
@@ -70,9 +57,6 @@ namespace {{packageName}}.Client
             Configuration = config ?? {{packageName}}.Client.Configuration.Default;
 
             RestClient = new RestClient(Configuration.BasePath);
-            {{#netStandard}}
-            RestClient.IgnoreResponseStatusCode = true;
-            {{/netStandard}}
         }
 
         /// <summary>
@@ -86,9 +70,6 @@ namespace {{packageName}}.Client
                 throw new ArgumentException("basePath cannot be empty");
 
             RestClient = new RestClient(basePath);
-            {{#netStandard}}
-            RestClient.IgnoreResponseStatusCode = true;
-            {{/netStandard}}
             Configuration = Client.Configuration.Default;
         }
 
@@ -118,16 +99,12 @@ namespace {{packageName}}.Client
 
         // Creates and sets up a RestRequest prior to a call.
         private RestRequest PrepareRequest(
-            String path, {{^netStandard}}RestSharp.{{/netStandard}}Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
+            String path, RestSharp.Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
             Dictionary<String, String> headerParams, Dictionary<String, String> formParams,
             Dictionary<String, FileParameter> fileParams, Dictionary<String, String> pathParams,
             String contentType)
         {
             var request = new RestRequest(path, method);
-            {{#netStandard}}
-            // disable ResetSharp.Portable built-in serialization
-            request.Serializer = null;
-            {{/netStandard}}
 
             // add path parameter, if any
             foreach(var param in pathParams)
@@ -148,29 +125,12 @@ namespace {{packageName}}.Client
             // add file parameter, if any
             foreach(var param in fileParams)
             {
-                {{#netStandard}}
-                request.AddFile(param.Value);
-                {{/netStandard}}
-                {{^netStandard}}
-                {{^supportsUWP}}
                 request.AddFile(param.Value.Name, param.Value.Writer, param.Value.FileName, param.Value.ContentType);
-                {{/supportsUWP}}
-                {{#supportsUWP}}
-                byte[] paramWriter = null;
-                param.Value.Writer = delegate (Stream stream) { paramWriter = ToByteArray(stream); };
-                request.AddFile(param.Value.Name, paramWriter, param.Value.FileName, param.Value.ContentType);
-                {{/supportsUWP}}
-                {{/netStandard}}
             }
 
             if (postBody != null) // http body (model or byte[]) parameter
             {
-                {{#netStandard}}
-                request.AddParameter(new Parameter { Value = postBody, Type = ParameterType.RequestBody, ContentType = contentType });
-                {{/netStandard}}
-                {{^netStandard}}
                 request.AddParameter(contentType, postBody, ParameterType.RequestBody);
-                {{/netStandard}}
             }
 
             return request;
@@ -190,7 +150,7 @@ namespace {{packageName}}.Client
         /// <param name="contentType">Content Type of the request</param>
         /// <returns>Object</returns>
         public Object CallApi(
-            String path, {{^netStandard}}RestSharp.{{/netStandard}}Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
+            String path, RestSharp.Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
             Dictionary<String, String> headerParams, Dictionary<String, String> formParams,
             Dictionary<String, FileParameter> fileParams, Dictionary<String, String> pathParams,
             String contentType)
@@ -200,56 +160,16 @@ namespace {{packageName}}.Client
                 pathParams, contentType);
 
             // set timeout
-            {{#netStandard}}RestClient.Timeout = TimeSpan.FromMilliseconds(Configuration.Timeout);{{/netStandard}}
-            {{^netStandard}}RestClient.Timeout = Configuration.Timeout;{{/netStandard}}
+            RestClient.Timeout = Configuration.Timeout;
             // set user agent
             RestClient.UserAgent = Configuration.UserAgent;
 
             InterceptRequest(request);
-            {{#netStandard}}
-            var response = RestClient.Execute(request).Result;
-            {{/netStandard}}
-            {{^netStandard}}
-            {{^supportsUWP}}
             var response = RestClient.Execute(request);
-            {{/supportsUWP}}
-            {{#supportsUWP}}
-            // Using async method to perform sync call (uwp-only)
-            var response = RestClient.ExecuteTaskAsync(request).Result;
-            {{/supportsUWP}}
-            {{/netStandard}}
             InterceptResponse(request, response);
 
             return (Object) response;
         }
-        {{#supportsAsync}}
-        /// <summary>
-        /// Makes the asynchronous HTTP request.
-        /// </summary>
-        /// <param name="path">URL path.</param>
-        /// <param name="method">HTTP method.</param>
-        /// <param name="queryParams">Query parameters.</param>
-        /// <param name="postBody">HTTP body (POST request).</param>
-        /// <param name="headerParams">Header parameters.</param>
-        /// <param name="formParams">Form parameters.</param>
-        /// <param name="fileParams">File parameters.</param>
-        /// <param name="pathParams">Path parameters.</param>
-        /// <param name="contentType">Content type.</param>
-        /// <returns>The Task instance.</returns>
-        public async System.Threading.Tasks.Task<Object> CallApiAsync(
-            String path, {{^netStandard}}RestSharp.{{/netStandard}}Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
-            Dictionary<String, String> headerParams, Dictionary<String, String> formParams,
-            Dictionary<String, FileParameter> fileParams, Dictionary<String, String> pathParams,
-            String contentType)
-        {
-            var request = PrepareRequest(
-                path, method, queryParams, postBody, headerParams, formParams, fileParams,
-                pathParams, contentType);
-            InterceptRequest(request);
-            var response = await RestClient.Execute{{^netStandard}}TaskAsync{{/netStandard}}(request);
-            InterceptResponse(request, response);
-            return (Object)response;
-        }{{/supportsAsync}}
 
         /// <summary>
         /// Escape string (url-encoded).
@@ -319,7 +239,7 @@ namespace {{packageName}}.Client
         /// <returns>Object representation of the JSON string.</returns>
         public object Deserialize(IRestResponse response, Type type)
         {
-            {{^netStandard}}IList<Parameter>{{/netStandard}}{{#netStandard}}IHttpHeaders{{/netStandard}} headers = response.Headers;
+            IList<Parameter> headers = response.Headers;
             if (type == typeof(byte[])) // return byte array
             {
                 return response.RawBytes;
@@ -458,12 +378,7 @@ namespace {{packageName}}.Client
         /// <param name="fromObject">Object to be casted</param>
         /// <param name="toObject">Target type</param>
         /// <returns>Casted object</returns>
-        {{#supportsAsync}}
-        public static dynamic ConvertType(dynamic fromObject, Type toObject)
-        {{/supportsAsync}}
-        {{^supportsAsync}}
         public static object ConvertType<T>(T fromObject, Type toObject) where T : class
-        {{/supportsAsync}}
         {
             return Convert.ChangeType(fromObject, toObject);
         }
@@ -540,23 +455,6 @@ namespace {{packageName}}.Client
                 return filename;
             }
         }
-        {{^netStandard}}
-        {{#supportsUWP}}
-        /// <summary>
-        /// Convert stream to byte array
-        /// </summary>
-        /// <param name="stream">IO stream</param>
-        /// <returns>Byte array</returns>
-        public static byte[] ToByteArray(Stream stream)
-        {
-            stream.Position = 0;
-            byte[] buffer = new byte[stream.Length];
-            for (int totalBytesCopied = 0; totalBytesCopied < stream.Length;)
-                totalBytesCopied += stream.Read(buffer, totalBytesCopied, Convert.ToInt32(stream.Length) - totalBytesCopied);
-            return buffer;
-        }
-        {{/supportsUWP}}
-        {{/netStandard}}
 
         /// <summary>
         /// Convert params to key/value pairs. 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>{{targetFrameworkNuget}}</TargetFramework>
+    <TargetFramework>net35</TargetFramework>
     <AssemblyName>{{packageName}}</AssemblyName>
     <PackageId>{{packageName}}</PackageId>
     <OutputType>Library</OutputType>
@@ -18,18 +18,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    {{#netStandard}}
-    <PackageReference Include="FubarCoder.RestSharp.Portable.Core" Version="4.0.7" />
-    <PackageReference Include="FubarCoder.RestSharp.Portable.HttpClient" Version="4.0.7" />
-    {{/netStandard}}
-    {{^netStandard}}
     <PackageReference Include="RestSharp" Version="105.1.0" />
-    {{/netStandard}}
     <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
     <PackageReference Include="JsonSubTypes" Version="1.2.0" />
   </ItemGroup>
 
-  {{^netStandard}}
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -41,6 +34,5 @@
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Xml" />
   </ItemGroup>
-  {{/netStandard}}
 
 </Project>

@@ -33,10 +33,6 @@
             <dependency id="NewtonSoft.Json" version="10.0.3" />
             <dependency id="JsonSubTypes" version="1.2.0" />
             <dependency id="RestSharp" version="105.1.0" />
-            {{#generatePropertyChanged}}
-            <dependency id="Fody" version="1.29.4" />
-            <dependency id="PropertyChanged.Fody" version="1.51.3" />
-            {{/generatePropertyChanged}}
 
         </dependencies>
     </metadata>
@@ -45,9 +41,6 @@
         <!-- A readme.txt will be displayed when the package is installed -->
         <file src="..\..\README.md" target="" />
         <file src="..\..\docs\**\*.*" target="docs" />
-        {{#generatePropertyChanged}}
-        <file src="..\..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets" target="build" />
-        {{/generatePropertyChanged}}
 
     </files>
 </package>

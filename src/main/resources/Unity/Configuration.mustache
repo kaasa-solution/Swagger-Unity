@@ -1,9 +1,6 @@
 {{>partial_header}}
 using System;
 using System.Reflection;
-{{^net35}}
-using System.Collections.Concurrent;
-{{/net35}}
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -50,11 +47,11 @@ namespace {{packageName}}.Client
                     string.Format("Error calling {0}: {1}", methodName, response.Content),
                     response.Content);
             }
-            {{^netStandard}}if (status == 0)
+            if (status == 0)
             {
                 return new ApiException(status,
                     string.Format("Error calling {0}: {1}", methodName, response.ErrorMessage), response.ErrorMessage);
-            }{{/netStandard}}
+            }
             return null;
         };
 
@@ -109,9 +106,9 @@ namespace {{packageName}}.Client
         {
             UserAgent = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen/{{packageVersion}}/csharp{{/httpUserAgent}}";
             BasePath = "{{{basePath}}}";
-            DefaultHeader = new {{^net35}}Concurrent{{/net35}}Dictionary<string, string>();
-            ApiKey = new {{^net35}}Concurrent{{/net35}}Dictionary<string, string>();
-            ApiKeyPrefix = new {{^net35}}Concurrent{{/net35}}Dictionary<string, string>();
+            DefaultHeader = new Dictionary<string, string>();
+            ApiKey = new Dictionary<string, string>();
+            ApiKeyPrefix = new Dictionary<string, string>();
 
             // Setting Timeout has side effects (forces ApiClient creation).
             Timeout = 100000;
@@ -126,7 +123,7 @@ namespace {{packageName}}.Client
             IDictionary<string, string> apiKeyPrefix,
             string basePath = "{{{basePath}}}") : this()
         {
-            if (string.{{^net35}}IsNullOrWhiteSpace{{/net35}}{{#net35}}IsNullOrEmpty{{/net35}}(basePath))
+            if (string.IsNullOrEmpty(basePath))
                 throw new ArgumentException("The provided basePath is invalid.", "basePath");
             if (defaultHeader == null)
                 throw new ArgumentNullException("defaultHeader");
@@ -241,10 +238,8 @@ namespace {{packageName}}.Client
         /// </summary>
         public virtual int Timeout
         {
-            {{#netStandard}}get { return (int)ApiClient.RestClient.Timeout.GetValueOrDefault(TimeSpan.FromSeconds(0)).TotalMilliseconds; }
-            set { ApiClient.RestClient.Timeout = TimeSpan.FromMilliseconds(value); }{{/netStandard}}{{^netStandard}}
             get { return ApiClient.RestClient.Timeout; }
-            set { ApiClient.RestClient.Timeout = value; }{{/netStandard}}
+            set { ApiClient.RestClient.Timeout = value; }
         }
 
         /// <summary>
@@ -413,15 +408,8 @@ namespace {{packageName}}.Client
         public static String ToDebugReport()
         {
             String report = "C# SDK ({{{packageName}}}) Debug Report:\n";
-            {{^netStandard}}
-            {{^supportsUWP}}
             report += "    OS: " + System.Environment.OSVersion + "\n";
             report += "    .NET Framework Version: " + System.Environment.Version  + "\n";
-            {{/supportsUWP}}
-            {{/netStandard}}
-            {{#netStandard}}
-            report += "    OS: " + System.Runtime.InteropServices.RuntimeInformation.OSDescription + "\n";
-            {{/netStandard}}
             report += "    Version of the API: {{{version}}}\n";
             report += "    SDK Package Version: {{{packageVersion}}}\n";
 
