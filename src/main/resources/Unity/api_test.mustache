@@ -42,7 +42,6 @@ namespace {{packageName}}.Test
         [TearDown]
         public void Cleanup()
         {
-
         }
 
         /// <summary>
@@ -52,10 +51,10 @@ namespace {{packageName}}.Test
         public void {{operationId}}InstanceTest()
         {
             // TODO uncomment below to test 'IsInstanceOfType' {{classname}}
-            //Assert.IsInstanceOfType(typeof({{classname}}), instance, "instance is a {{classname}}");
+            //Assert.IsInstanceOf<{{classname}}>(instance, "instance is a {{classname}}");
         }
-
         {{#operations}}{{#operation}}
+
         /// <summary>
         /// Test {{operationId}}
         /// </summary>
@@ -66,10 +65,8 @@ namespace {{packageName}}.Test
             {{#allParams}}
             //{{{dataType}}} {{paramName}} = null;
             {{/allParams}}
-            //{{#returnType}}var response = {{/returnType}}instance.{{operationId}}({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});
-            {{#returnType}}//Assert.IsInstanceOf<{{{returnType}}}> (response, "response is {{{returnType}}}");{{/returnType}}
-        }
-        {{/operation}}{{/operations}}
+            //{{#returnType}}var response = {{/returnType}}instance.{{operationId}}({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});{{#returnType}}
+            //Assert.IsInstanceOf<{{{returnType}}}>(response, "response is {{{returnType}}}");{{/returnType}}
+        }{{/operation}}{{/operations}}
     }
-
 }
