@@ -23,7 +23,6 @@ cp packages/JsonSubTypes.1.2.0/lib/net35/JsonSubTypes.dll bin/JsonSubTypes.dll
 echo "[INFO] Run 'mcs' to build bin/{{{packageName}}}.dll"
 mcs -langversion:4 -sdk:4 -r:bin/Newtonsoft.Json.dll,bin/JsonSubTypes.dll,\
 bin/RestSharp.dll,\
-System.ComponentModel.DataAnnotations.dll,\
 System.Runtime.Serialization.dll \
 -target:library \
 -out:bin/{{packageName}}.dll \
