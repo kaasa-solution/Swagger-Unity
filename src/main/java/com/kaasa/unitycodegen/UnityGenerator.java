@@ -315,12 +315,12 @@ public class UnityGenerator extends AbstractCSharpCodegen {
 
     @Override
     public String getName() {
-        return "csharp";
+        return "unity";
     }
 
     @Override
     public String getHelp() {
-        return "Generates a CSharp client library.";
+        return "Generates a Unity client library.";
     }
 
     public void setOptionalAssemblyInfoFlag(boolean flag) {
