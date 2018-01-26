@@ -17,12 +17,10 @@ ${nuget_cmd} install src/{{packageName}}/packages.config -o packages;
 echo "[INFO] Copy DLLs to the 'bin' folder"
 mkdir -p bin;
 cp packages/Newtonsoft.Json.10.0.3/lib/net35/Newtonsoft.Json.dll bin/Newtonsoft.Json.dll;
-cp packages/RestSharp.105.1.0/lib/net35/RestSharp.dll bin/RestSharp.dll;
 cp packages/JsonSubTypes.1.2.0/lib/net35/JsonSubTypes.dll bin/JsonSubTypes.dll
 
 echo "[INFO] Run 'mcs' to build bin/{{{packageName}}}.dll"
 mcs -langversion:4 -sdk:4 -r:bin/Newtonsoft.Json.dll,bin/JsonSubTypes.dll,\
-bin/RestSharp.dll,\
 System.Runtime.Serialization.dll \
 -target:library \
 -out:bin/{{packageName}}.dll \

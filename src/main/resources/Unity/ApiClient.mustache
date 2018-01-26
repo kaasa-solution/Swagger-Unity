@@ -2,15 +2,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text.RegularExpressions;
 using System.IO;
-using System.Web;
 using System.Linq;
-using System.Net;
 using System.Text;
 using Newtonsoft.Json;
-using RestSharp;
+using UnityEngine.Networking;
 
 namespace {{packageName}}.Client
 {
@@ -27,15 +24,14 @@ namespace {{packageName}}.Client
         /// <summary>
         /// Allows for extending request processing for <see cref="ApiClient"/> generated code.
         /// </summary>
-        /// <param name="request">The RestSharp request object</param>
-        partial void InterceptRequest(IRestRequest request);
+        /// <param name="request">The Unity request object</param>
+        partial void InterceptRequest(UnityWebRequest request);
 
         /// <summary>
         /// Allows for extending response processing for <see cref="ApiClient"/> generated code.
         /// </summary>
-        /// <param name="request">The RestSharp request object</param>
-        /// <param name="response">The RestSharp response object</param>
-        partial void InterceptResponse(IRestRequest request, IRestResponse response);
+        /// <param name="request">The Unity request object</param>
+        partial void InterceptResponse(UnityWebRequest request);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ApiClient" /> class
@@ -44,7 +40,7 @@ namespace {{packageName}}.Client
         public ApiClient()
         {
             Configuration = {{packageName}}.Client.Configuration.Default;
-            RestClient = new RestClient("{{{basePath}}}");
+            BasePath = "{{{basePath}}}";
         }
 
         /// <summary>
@@ -56,7 +52,7 @@ namespace {{packageName}}.Client
         {
             Configuration = config ?? {{packageName}}.Client.Configuration.Default;
 
-            RestClient = new RestClient(Configuration.BasePath);
+            BasePath = Configuration.BasePath;
         }
 
         /// <summary>
@@ -66,10 +62,10 @@ namespace {{packageName}}.Client
         /// <param name="basePath">The base path.</param>
         public ApiClient(String basePath = "{{{basePath}}}")
         {
-           if (String.IsNullOrEmpty(basePath))
+            if (String.IsNullOrEmpty(basePath))
                 throw new ArgumentException("basePath cannot be empty");
 
-            RestClient = new RestClient(basePath);
+            BasePath = basePath;
             Configuration = Client.Configuration.Default;
         }
 
@@ -92,52 +88,104 @@ namespace {{packageName}}.Client
         public IReadableConfiguration Configuration { get; set; }
 
         /// <summary>
-        /// Gets or sets the RestClient.
+        /// Gets or sets the base path.
         /// </summary>
-        /// <value>An instance of the RestClient</value>
-        public RestClient RestClient { get; set; }
+        /// <value>The base path</value>
+        public String BasePath { get; set; }
+
+        private String AddParameters(String path, IEnumerable<KeyValuePair<String, String>> parameters)
+        {
+            return path + (path.Contains("?") ? "&" : "?") +
+                String.Join("&", parameters.Select(p => UrlEncode(p.Key) + "=" + (p.Value == null ? "" : UrlEncode(p.Value))).ToArray());
+        }
 
         // Creates and sets up a RestRequest prior to a call.
-        private RestRequest PrepareRequest(
-            String path, RestSharp.Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
+        private UnityWebRequest PrepareRequest(
+            String path, String method, List<KeyValuePair<String, String>> queryParams, Object postBody,
             Dictionary<String, String> headerParams, Dictionary<String, String> formParams,
-            Dictionary<String, FileParameter> fileParams, Dictionary<String, String> pathParams,
+            List<IMultipartFormSection> fileParams, Dictionary<String, String> pathParams,
             String contentType)
         {
-            var request = new RestRequest(path, method);
+            byte[] uploadData = null;
 
             // add path parameter, if any
-            foreach(var param in pathParams)
-                request.AddParameter(param.Key, param.Value, ParameterType.UrlSegment);
-
-            // add header parameter, if any
-            foreach(var param in headerParams)
-                request.AddHeader(param.Key, param.Value);
+            foreach (var param in pathParams)
+            {
+                var placeholder = "{" + param.Key + "}";
+                var value = UrlEncode(param.Value);
+                path = path.Replace(placeholder, value);
+            }
 
             // add query parameter, if any
-            foreach(var param in queryParams)
-                request.AddQueryParameter(param.Key, param.Value);
+            if (queryParams != null && queryParams.Count > 0)
+            {
+                path = AddParameters(path, queryParams);
+            }
 
             // add form parameter, if any
-            foreach(var param in formParams)
-                request.AddParameter(param.Key, param.Value);
-
-            // add file parameter, if any
-            foreach(var param in fileParams)
+            if ("POST".Equals(method) || "PUT".Equals(method) || "PATCH".Equals(method))
             {
-                request.AddFile(param.Value.Name, param.Value.Writer, param.Value.FileName, param.Value.ContentType);
+                // add file parameter, if any
+                if (fileParams != null && fileParams.Count > 0)
+                {
+                    foreach (var param in formParams)
+                    {
+                        fileParams.Add(new MultipartFormDataSection(param.Key, param.Value));
+                    }
+
+                    var boundary = UnityWebRequest.GenerateBoundary();
+                    contentType = "multipart/form-data; boundary=" + Encoding.UTF8.GetString(boundary, 0, boundary.Length);
+                    uploadData = UnityWebRequest.SerializeFormSections(fileParams, boundary);
+                }
+                else
+                {
+                    uploadData = UnityWebRequest.SerializeSimpleForm(formParams);
+                }
+            }
+            else
+            {
+                path = AddParameters(path, formParams);
             }
 
             if (postBody != null) // http body (model or byte[]) parameter
             {
-                request.AddParameter(contentType, postBody, ParameterType.RequestBody);
+                var postBodyBytes = postBody as byte[];
+                if (postBodyBytes == null)
+                {
+                    postBodyBytes = Encoding.UTF8.GetBytes((string)postBody);
+                }
+
+                if (uploadData == null)
+                {
+                    uploadData = postBodyBytes;
+                }
+                else
+                {
+                    var buffer = new byte[uploadData.Length + 1 + postBodyBytes.Length];
+                    Buffer.BlockCopy(uploadData, 0, buffer, 0, uploadData.Length);
+                    buffer[uploadData.Length] = (byte)'&';
+                    Buffer.BlockCopy(postBodyBytes, 0, buffer, uploadData.Length + 1, postBodyBytes.Length);
+                    uploadData = buffer;
+                }
+            }
+
+            var request = new UnityWebRequest(BasePath + path, method, new DownloadHandlerBuffer(),
+                uploadData != null ? new UploadHandlerRaw(uploadData)
+                {
+                    contentType = contentType
+                } : null);
+
+            // add header parameter, if any
+            foreach (var param in headerParams)
+            {
+                request.SetRequestHeader(param.Key, param.Value);
             }
 
             return request;
         }
 
         /// <summary>
-        /// Makes the HTTP request (Sync).
+        /// Makes the HTTP request.
         /// </summary>
         /// <param name="path">URL path.</param>
         /// <param name="method">HTTP method.</param>
@@ -148,27 +196,30 @@ namespace {{packageName}}.Client
         /// <param name="fileParams">File parameters.</param>
         /// <param name="pathParams">Path parameters.</param>
         /// <param name="contentType">Content Type of the request</param>
-        /// <returns>Object</returns>
-        public Object CallApi(
-            String path, RestSharp.Method method, List<KeyValuePair<String, String>> queryParams, Object postBody,
+        /// <param name="requestGetter">Action which gets the processed request</param>
+        /// <returns>IEnumerator</returns>
+        public IEnumerator CallApi(
+            String path, String method, List<KeyValuePair<String, String>> queryParams, Object postBody,
             Dictionary<String, String> headerParams, Dictionary<String, String> formParams,
-            Dictionary<String, FileParameter> fileParams, Dictionary<String, String> pathParams,
-            String contentType)
+            List<IMultipartFormSection> fileParams, Dictionary<String, String> pathParams,
+            String contentType, Action<UnityWebRequest> requestReceiver)
         {
-            var request = PrepareRequest(
+            using (var request = PrepareRequest(
                 path, method, queryParams, postBody, headerParams, formParams, fileParams,
-                pathParams, contentType);
+                pathParams, contentType))
+            {
+                // set timeout
+                request.timeout = Configuration.Timeout / 1000;
 
-            // set timeout
-            RestClient.Timeout = Configuration.Timeout;
-            // set user agent
-            RestClient.UserAgent = Configuration.UserAgent;
+                InterceptRequest(request);
+                yield return request.SendWebRequest();
+                InterceptResponse(request);
 
-            InterceptRequest(request);
-            var response = RestClient.Execute(request);
-            InterceptResponse(request, response);
-
-            return (Object) response;
+                if (requestReceiver != null)
+                {
+                    requestReceiver(request);
+                }
+            }
         }
 
         /// <summary>
@@ -181,18 +232,36 @@ namespace {{packageName}}.Client
             return UrlEncode(str);
         }
 
+        // https://stackoverflow.com/a/221941/3557679
+        private static byte[] ReadAllBytes(Stream stream)
+        {
+            if (stream is MemoryStream)
+            {
+                return ((MemoryStream)stream).ToArray();
+            }
+
+            var buf = new byte[0x4000];
+            using (var ms = new MemoryStream((int)Math.Max(0, Math.Min(stream.Length, Int32.MaxValue))))
+            {
+                int read;
+                while ((read = stream.Read(buf, 0, buf.Length)) > 0)
+                {
+                    ms.Write(buf, 0, read);
+                }
+                return ms.ToArray();
+            }
+        }
+
         /// <summary>
-        /// Create FileParameter based on Stream.
+        /// Create IMultipartFormSection based on Stream.
         /// </summary>
         /// <param name="name">Parameter name.</param>
         /// <param name="stream">Input stream.</param>
-        /// <returns>FileParameter.</returns>
-        public FileParameter ParameterToFile(string name, Stream stream)
+        /// <returns>IMultipartFormSection.</returns>
+        public IMultipartFormSection ParameterToFile(string name, Stream stream)
         {
-            if (stream is FileStream)
-                return FileParameter.Create(name, ReadAsBytes(stream), Path.GetFileName(((FileStream)stream).Name));
-            else
-                return FileParameter.Create(name, ReadAsBytes(stream), "no_file_name_provided");
+            return new MultipartFormFileSection(name, ReadAllBytes(stream),
+                stream is FileStream ? Path.GetFileName(((FileStream)stream).Name) : null, null);
         }
 
         /// <summary>
@@ -209,13 +278,13 @@ namespace {{packageName}}.Client
                 // Defaults to an ISO 8601, using the known as a Round-trip date/time pattern ("o")
                 // https://msdn.microsoft.com/en-us/library/az4se3k1(v=vs.110).aspx#Anchor_8
                 // For example: 2009-06-15T13:45:30.0000000
-                return ((DateTime)obj).ToString (Configuration.DateTimeFormat);
+                return ((DateTime)obj).ToString(Configuration.DateTimeFormat);
             else if (obj is DateTimeOffset)
                 // Return a formatted date string - Can be customized with Configuration.DateTimeFormat
                 // Defaults to an ISO 8601, using the known as a Round-trip date/time pattern ("o")
                 // https://msdn.microsoft.com/en-us/library/az4se3k1(v=vs.110).aspx#Anchor_8
                 // For example: 2009-06-15T13:45:30.0000000
-                return ((DateTimeOffset)obj).ToString (Configuration.DateTimeFormat);
+                return ((DateTimeOffset)obj).ToString(Configuration.DateTimeFormat);
             else if (obj is IList)
             {
                 var flattenedString = new StringBuilder();
@@ -228,7 +297,7 @@ namespace {{packageName}}.Client
                 return flattenedString.ToString();
             }
             else
-                return Convert.ToString (obj);
+                return Convert.ToString(obj);
         }
 
         /// <summary>
@@ -237,17 +306,17 @@ namespace {{packageName}}.Client
         /// <param name="response">The HTTP response.</param>
         /// <param name="type">Object type.</param>
         /// <returns>Object representation of the JSON string.</returns>
-        public object Deserialize(IRestResponse response, Type type)
+        public object Deserialize(UnityWebRequest response, Type type)
         {
-            IList<Parameter> headers = response.Headers;
             if (type == typeof(byte[])) // return byte array
             {
-                return response.RawBytes;
+                return response.downloadHandler.data;
             }
 
             // TODO: ? if (type.IsAssignableFrom(typeof(Stream)))
             if (type == typeof(Stream))
             {
+                var headers = response.GetResponseHeaders();
                 if (headers != null)
                 {
                     var filePath = String.IsNullOrEmpty(Configuration.TempFolderPath)
@@ -256,33 +325,33 @@ namespace {{packageName}}.Client
                     var regex = new Regex(@"Content-Disposition=.*filename=['""]?([^'""\s]+)['""]?$");
                     foreach (var header in headers)
                     {
-                        var match = regex.Match(header.ToString());
+                        var match = regex.Match(string.Format("{0}={1}", header.Key, header.Value));
                         if (match.Success)
                         {
                             string fileName = filePath + SanitizeFilename(match.Groups[1].Value.Replace("\"", "").Replace("'", ""));
-                            File.WriteAllBytes(fileName, response.RawBytes);
+                            File.WriteAllBytes(fileName, response.downloadHandler.data);
                             return new FileStream(fileName, FileMode.Open);
                         }
                     }
                 }
-                var stream = new MemoryStream(response.RawBytes);
+                var stream = new MemoryStream(response.downloadHandler.data);
                 return stream;
             }
 
             if (type.Name.StartsWith("System.Nullable`1[[System.DateTime")) // return a datetime object
             {
-                return DateTime.Parse(response.Content,  null, System.Globalization.DateTimeStyles.RoundtripKind);
+                return DateTime.Parse(response.downloadHandler.text, null, System.Globalization.DateTimeStyles.RoundtripKind);
             }
 
             if (type == typeof(String) || type.Name.StartsWith("System.Nullable")) // return primitive type
             {
-                return ConvertType(response.Content, type);
+                return ConvertType(response.downloadHandler.text, type);
             }
 
             // at this point, it must be a model (json)
             try
             {
-                return JsonConvert.DeserializeObject(response.Content, type, serializerSettings);
+                return JsonConvert.DeserializeObject(response.downloadHandler.text, type, serializerSettings);
             }
             catch (Exception e)
             {
@@ -390,7 +459,7 @@ namespace {{packageName}}.Client
         /// <returns>Byte array</returns>
         public static byte[] ReadAsBytes(Stream inputStream)
         {
-            byte[] buf = new byte[16*1024];
+            byte[] buf = new byte[0x4000];
             using (MemoryStream ms = new MemoryStream())
             {
                 int count;
@@ -410,7 +479,7 @@ namespace {{packageName}}.Client
         /// <returns>Byte array</returns>
         public static string UrlEncode(string input)
         {
-            const int maxLength = 32766;
+            const int maxLength = 0x8000 - 2;
 
             if (input == null)
             {

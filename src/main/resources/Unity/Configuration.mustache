@@ -40,17 +40,16 @@ namespace {{packageName}}.Client
         /// </summary>
         public static readonly ExceptionFactory DefaultExceptionFactory = (methodName, response) =>
         {
-            var status = (int)response.StatusCode;
-            if (status >= 400)
+            if (response.isHttpError)
             {
-                return new ApiException(status,
-                    string.Format("Error calling {0}: {1}", methodName, response.Content),
-                    response.Content);
+                return new ApiException((int)response.responseCode,
+                    string.Format("Error calling {0}: {1}", methodName, response.downloadHandler.text),
+                    response.downloadHandler.text);
             }
-            if (status == 0)
+            if (response.isNetworkError)
             {
-                return new ApiException(status,
-                    string.Format("Error calling {0}: {1}", methodName, response.ErrorMessage), response.ErrorMessage);
+                return new ApiException((int)response.responseCode,
+                    string.Format("Error calling {0}: {1}", methodName, response.error), response.error);
             }
             return null;
         };
@@ -104,13 +103,12 @@ namespace {{packageName}}.Client
         /// </summary>
         public Configuration()
         {
-            UserAgent = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen/{{packageVersion}}/csharp{{/httpUserAgent}}";
             BasePath = "{{{basePath}}}";
             DefaultHeader = new Dictionary<string, string>();
             ApiKey = new Dictionary<string, string>();
             ApiKeyPrefix = new Dictionary<string, string>();
 
-            // Setting Timeout has side effects (forces ApiClient creation).
+            if (_apiClient == null) _apiClient = CreateApiClient();
             Timeout = 100000;
         }
 
@@ -163,7 +161,6 @@ namespace {{packageName}}.Client
         /// <param name="tempFolderPath">Temp folder path</param>
         /// <param name="dateTimeFormat">DateTime format string</param>
         /// <param name="timeout">HTTP connection timeout (in milliseconds)</param>
-        /// <param name="userAgent">HTTP user agent</param>
         [Obsolete("Use explicit object construction and setting of properties.", true)]
         public Configuration(
             // ReSharper disable UnusedParameter.Local
@@ -176,8 +173,7 @@ namespace {{packageName}}.Client
             IDictionary<string, string> apiKeyPrefix = null,
             string tempFolderPath = null,
             string dateTimeFormat = null,
-            int timeout = 100000,
-            string userAgent = "{{#httpUserAgent}}{{.}}{{/httpUserAgent}}{{^httpUserAgent}}Swagger-Codegen/{{packageVersion}}/csharp{{/httpUserAgent}}"
+            int timeout = 100000
             // ReSharper restore UnusedParameter.Local
             )
         {
@@ -219,11 +215,12 @@ namespace {{packageName}}.Client
         /// </summary>
         public virtual string BasePath {
             get { return _basePath; }
-            set {
+            set
+            {
                 _basePath = value;
                 // pass-through to ApiClient if it's set.
                 if(_apiClient != null) {
-                    _apiClient.RestClient.BaseUrl = new Uri(_basePath);
+                    _apiClient.BasePath = _basePath;
                 }
             }
         }
@@ -233,20 +230,15 @@ namespace {{packageName}}.Client
         /// </summary>
         public virtual IDictionary<string, string> DefaultHeader { get; set; }
 
+        private int _timeout = 0;
         /// <summary>
         /// Gets or sets the HTTP timeout (milliseconds) of ApiClient. Default to 100000 milliseconds.
         /// </summary>
         public virtual int Timeout
         {
-            get { return ApiClient.RestClient.Timeout; }
-            set { ApiClient.RestClient.Timeout = value; }
+            get { return _timeout; }
+            set { _timeout = value; }
         }
-
-        /// <summary>
-        /// Gets or sets the HTTP user agent.
-        /// </summary>
-        /// <value>Http user agent.</value>
-        public virtual string UserAgent { get; set; }
 
         /// <summary>
         /// Gets or sets the username (HTTP basic authentication).

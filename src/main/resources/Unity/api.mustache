@@ -1,9 +1,10 @@
 {{>partial_header}}
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using RestSharp;
+using UnityEngine.Networking;
 using {{packageName}}.Client;
 {{#hasImport}}using {{packageName}}.{{modelPackage}};
 {{/hasImport}}
@@ -16,18 +17,7 @@ namespace {{packageName}}.{{apiPackage}}
     /// </summary>
     {{>visibility}} interface {{interfacePrefix}}{{classname}} : IApiAccessor
     {
-        #region Synchronous Operations
         {{#operation}}
-        /// <summary>
-        /// {{summary}}
-        /// </summary>
-        /// <remarks>
-        /// {{notes}}
-        /// </remarks>
-        /// <exception cref="{{packageName}}.Client.ApiException">Thrown when fails to make API call</exception>
-        {{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
-        {{/allParams}}/// <returns>{{#returnType}}{{returnType}}{{/returnType}}</returns>
-        {{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}void{{/returnType}} {{operationId}}({{#allParams}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{#hasMore}}, {{/hasMore}}{{/allParams}});
 
         /// <summary>
         /// {{summary}}
@@ -36,11 +26,23 @@ namespace {{packageName}}.{{apiPackage}}
         /// {{notes}}
         /// </remarks>
         /// <exception cref="{{packageName}}.Client.ApiException">Thrown when fails to make API call</exception>
+        {{#returnType}}/// <param name="resultReceiver">Action which gets {{returnType}}</param>
+        {{/returnType}}{{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
+        {{/allParams}}/// <returns>IEnumerator</returns>
+        IEnumerator {{operationId}}({{#returnType}}Action<{{{returnType}}}> responseReceiver{{/returnType}}{{#allParams}}{{#returnType}}, {{/returnType}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{^returnType}}{{#hasMore}}, {{/hasMore}}{{/returnType}}{{/allParams}});
+
+        /// <summary>
+        /// {{summary}}
+        /// </summary>
+        /// <remarks>
+        /// {{notes}}
+        /// </remarks>
+        /// <exception cref="{{packageName}}.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="resultReceiver">Action which gets the ApiResponse of {{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}Object(void){{/returnType}}</param>
         {{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
-        {{/allParams}}/// <returns>ApiResponse of {{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}Object(void){{/returnType}}</returns>
-        ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Object{{/returnType}}> {{operationId}}WithHttpInfo({{#allParams}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{#hasMore}}, {{/hasMore}}{{/allParams}});
+        {{/allParams}}/// <returns>IEnumerator</returns>
+        IEnumerator {{operationId}}WithHttpInfo(Action<ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Object{{/returnType}}>> resultReceiver{{#allParams}}, {{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{/allParams}});
         {{/operation}}
-        #endregion Synchronous Operations
     }
 
     /// <summary>
@@ -83,7 +85,7 @@ namespace {{packageName}}.{{apiPackage}}
         /// <value>The base path</value>
         public String GetBasePath()
         {
-            return this.Configuration.ApiClient.RestClient.BaseUrl.ToString();
+            return this.Configuration.ApiClient.BasePath;
         }
 
         /// <summary>
@@ -139,27 +141,28 @@ namespace {{packageName}}.{{apiPackage}}
         {
             this.Configuration.AddDefaultHeader(key, value);
         }
-
         {{#operation}}
+
         /// <summary>
         /// {{summary}} {{notes}}
         /// </summary>
         /// <exception cref="{{packageName}}.Client.ApiException">Thrown when fails to make API call</exception>
-        {{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
-        {{/allParams}}/// <returns>{{#returnType}}{{returnType}}{{/returnType}}</returns>
-        public {{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}void{{/returnType}} {{operationId}}({{#allParams}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{#hasMore}}, {{/hasMore}}{{/allParams}})
+        {{#returnType}}/// <param name="resultReceiver">Action which gets {{returnType}}</param>
+        {{/returnType}}{{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
+        {{/allParams}}/// <returns>IEnumerator</returns>
+        public IEnumerator {{operationId}}({{#returnType}}Action<{{{returnType}}}> responseReceiver{{/returnType}}{{#allParams}}{{#returnType}}, {{/returnType}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{^returnType}}{{#hasMore}}, {{/hasMore}}{{/returnType}}{{/allParams}})
         {
-             {{#returnType}}ApiResponse<{{{returnType}}}> localVarResponse = {{operationId}}WithHttpInfo({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});
-             return localVarResponse.Data;{{/returnType}}{{^returnType}}{{operationId}}WithHttpInfo({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});{{/returnType}}
+            return {{operationId}}WithHttpInfo({{#returnType}}response => { if (responseReceiver != null) responseReceiver(response.Data); }{{/returnType}}{{^returnType}}null{{/returnType}}{{#allParams}}, {{paramName}}{{/allParams}});
         }
 
         /// <summary>
         /// {{summary}} {{notes}}
         /// </summary>
         /// <exception cref="{{packageName}}.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="resultReceiver">Action which gets the ApiResponse of {{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}Object(void){{/returnType}}</param>
         {{#allParams}}/// <param name="{{paramName}}">{{description}}{{^required}} (optional{{#defaultValue}}, default to {{.}}{{/defaultValue}}){{/required}}</param>
-        {{/allParams}}/// <returns>ApiResponse of {{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}Object(void){{/returnType}}</returns>
-        public ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Object{{/returnType}}> {{operationId}}WithHttpInfo({{#allParams}}{{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{#hasMore}}, {{/hasMore}}{{/allParams}})
+        {{/allParams}}/// <returns>IEnumerator</returns>
+        public IEnumerator {{operationId}}WithHttpInfo(Action<ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Object{{/returnType}}>> resultReceiver{{#allParams}}, {{{dataType}}} {{paramName}}{{^required}}{{#optionalMethodArgument}} = null{{/optionalMethodArgument}}{{/required}}{{/allParams}})
         {
             {{#allParams}}
             {{#required}}
@@ -174,7 +177,7 @@ namespace {{packageName}}.{{apiPackage}}
             var localVarQueryParams = new List<KeyValuePair<String, String>>();
             var localVarHeaderParams = new Dictionary<String, String>(Configuration.DefaultHeader);
             var localVarFormParams = new Dictionary<String, String>();
-            var localVarFileParams = new Dictionary<String, FileParameter>();
+            var localVarFileParams = new List<IMultipartFormSection>();
             Object localVarPostBody = null;
 
             // to determine the Content-Type header
@@ -205,7 +208,7 @@ namespace {{packageName}}.{{apiPackage}}
             if ({{paramName}} != null) localVarHeaderParams.Add("{{baseName}}", Configuration.ApiClient.ParameterToString({{paramName}})); // header parameter
             {{/headerParams}}
             {{#formParams}}
-            if ({{paramName}} != null) {{#isFile}}localVarFileParams.Add("{{baseName}}", Configuration.ApiClient.ParameterToFile("{{baseName}}", {{paramName}}));{{/isFile}}{{^isFile}}localVarFormParams.Add("{{baseName}}", Configuration.ApiClient.ParameterToString({{paramName}})); // form parameter{{/isFile}}
+            if ({{paramName}} != null) {{#isFile}}localVarFileParams.Add(Configuration.ApiClient.ParameterToFile("{{baseName}}", {{paramName}}));{{/isFile}}{{^isFile}}localVarFormParams.Add("{{baseName}}", Configuration.ApiClient.ParameterToString({{paramName}})); // form parameter{{/isFile}}
             {{/formParams}}
             {{#bodyParam}}
             if ({{paramName}} != null && {{paramName}}.GetType() != typeof(byte[]))
@@ -251,28 +254,29 @@ namespace {{packageName}}.{{apiPackage}}
             {{/authMethods}}
 
             // make the HTTP request
-            IRestResponse localVarResponse = (IRestResponse)Configuration.ApiClient.CallApi(localVarPath,
-                Method.{{httpMethod}}, localVarQueryParams, localVarPostBody, localVarHeaderParams, localVarFormParams, localVarFileParams,
-                localVarPathParams, localVarHttpContentType);
+            yield return Configuration.ApiClient.CallApi(localVarPath,
+                "GET", localVarQueryParams, localVarPostBody, localVarHeaderParams, localVarFormParams, localVarFileParams,
+                localVarPathParams, localVarHttpContentType, localVarResponse =>
+                {
+                    if (ExceptionFactory != null)
+                    {
+                        Exception exception = ExceptionFactory("{{operationId}}", localVarResponse);
+                        if (exception != null) throw exception;
+                    }
 
-            int localVarStatusCode = (int)localVarResponse.StatusCode;
+                    int localVarStatusCode = (int)localVarResponse.responseCode;
 
-            if (ExceptionFactory != null)
-            {
-                Exception exception = ExceptionFactory("{{operationId}}", localVarResponse);
-                if (exception != null) throw exception;
-            }
-
-            {{#returnType}}
-            return new ApiResponse<{{{returnType}}}>(localVarStatusCode,
-                localVarResponse.Headers.ToDictionary(x => x.Name, x => x.Value.ToString()),
-                ({{{returnType}}})Configuration.ApiClient.Deserialize(localVarResponse, typeof({{#returnContainer}}{{{returnContainer}}}{{/returnContainer}}{{^returnContainer}}{{{returnType}}}{{/returnContainer}})));
-            {{/returnType}}
-            {{^returnType}}
-            return new ApiResponse<Object>(localVarStatusCode,
-                localVarResponse.Headers.ToDictionary(x => x.Name, x => x.Value.ToString()),
-                null);
-            {{/returnType}}
+                    if (resultReceiver != null)
+                    {
+                        {{#returnType}}
+                        resultReceiver(new ApiResponse<{{{returnType}}}>(localVarStatusCode, localVarResponse.GetResponseHeaders(),
+                            ({{{returnType}}})Configuration.ApiClient.Deserialize(localVarResponse, typeof({{#returnContainer}}{{{returnContainer}}}{{/returnContainer}}{{^returnContainer}}{{{returnType}}}{{/returnContainer}}))));
+                        {{/returnType}}
+                        {{^returnType}}
+                        resultReceiver(new ApiResponse<Object>(localVarStatusCode, localVarResponse.GetResponseHeaders(), null));
+                        {{/returnType}}
+                    }
+                });
         }
         {{/operation}}
     }

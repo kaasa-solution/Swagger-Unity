@@ -12,6 +12,5 @@ if not exist ".\bin" mkdir bin
 
 copy packages\Newtonsoft.Json.10.0.3\lib\net35\Newtonsoft.Json.dll bin\Newtonsoft.Json.dll
 copy packages\JsonSubTypes.1.2.0\lib\net35\JsonSubTypes.dll bin\JsonSubTypes.dll
-copy packages\RestSharp.105.1.0\lib\net35\RestSharp.dll bin\RestSharp.dll
-%CSCPATH%\csc  /reference:bin\Newtonsoft.Json.dll;bin\JsonSubTypes.dll;bin\RestSharp.dll /target:library /out:bin\{{packageName}}.dll /recurse:src\{{packageName}}\*.cs /doc:bin\{{packageName}}.xml
+%CSCPATH%\csc  /reference:bin\Newtonsoft.Json.dll;bin\JsonSubTypes.dll /target:library /out:bin\{{packageName}}.dll /recurse:src\{{packageName}}\*.cs /doc:bin\{{packageName}}.xml
 
